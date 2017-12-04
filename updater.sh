@@ -81,8 +81,8 @@ if /tmp/busybox test -e /dev/block/mmcblk0p3 ; then
 fi
 
 # check if we're running on a bml or mtd device
-if /tmp/busybox test -e /dev/block/bml7 ; then
-    # we're running on a bml device
+if /tmp/busybox test -e /dev/block/bml7 || [ "$(/tmp/busybox cat /sys/class/mtd/mtd1/name)" != "ramdisk" ] ; then
+    # we're running on a bml or an old mtd device
 
     # warn repartition
     warn_repartition
@@ -90,14 +90,18 @@ if /tmp/busybox test -e /dev/block/bml7 ; then
     # make sure sdcard is mounted
     check_mount /sdcard /dev/block/mmcblk0p1 vfat
 
-    # everything is logged into /mnt/sdcard/aries_bml.log
-    set_log /sdcard/aries_bml.log
+    # everything is logged into /sdcard/aries_ubi_update.log
+    set_log /sdcard/aries_ubi_update.log
 
-	# copy ramdisk to sdcard
-	/tmp/busybox cp /tmp/ramdisk.cpio /sdcard
+    # copy ramdisk to sdcard
+    /tmp/busybox cp /tmp/ramdisk.cpio /sdcard
 
     # make sure efs is mounted
-    check_mount /efs /dev/block/stl3 rfs
+    if /tmp/busybox test -e /dev/block/mtdblock0 ; then
+        check_mount /efs /dev/block/stl3 yaffs2
+    else
+        check_mount /efs /dev/block/stl3 rfs
+    fi
 
     # create a backup of efs
     if /tmp/busybox test -e /sdcard/backup/efs.tar ; then
@@ -117,7 +121,7 @@ if /tmp/busybox test -e /dev/block/bml7 ; then
     /tmp/busybox md5sum -t efs.tar > efs.tar.md5
 
     # write new kernel to boot partition
-	/tmp/busybox chmod +x /tmp/flash_image
+    /tmp/busybox chmod +x /tmp/flash_image
     /tmp/flash_image boot /tmp/boot.img
     if [ "$?" != "0" ] ; then
         /tmp/busybox echo "Failed to write kernel to boot partition"
@@ -130,12 +134,22 @@ if /tmp/busybox test -e /dev/block/bml7 ; then
 
     /sbin/reboot
     exit 0
-
 elif /tmp/busybox test -e /dev/block/mtdblock0 ; then
-# we're running on an mtd device
+    # we're running on an mtd (new) device
 
-    ui_print "This is only to be run from BML (stock)"
-    ui_print "It will not work properly on MTD ROMs"
+    # make sure sdcard is mounted
+    check_mount /sdcard /dev/block/mmcblk0p1 ext4
 
-    exit 2
+    # everything is logged into /sdcard/aries_mtd.log
+    set_log /sdcard/aries_mtd.log
+
+    # write new kernel to boot partition
+    /tmp/busybox chmod +x /tmp/flash_image
+    /tmp/flash_image boot /tmp/boot.img
+    if [ "$?" != "0" ] ; then
+        /tmp/busybox echo "Failed to write kernel to boot partition"
+        exit 2
+    fi
+    /tmp/busybox umount /sdcard
+    exit 0
 fi
