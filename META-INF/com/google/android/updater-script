@@ -1,0 +1,14 @@
+(!less_than_int(1488937848, getprop("ro.build.date.utc"))) || abort("E3003: Can't install this package (Tue Mar  7 17:50:48 PST 2017) over newer build (" + getprop("ro.build.date") + ").");
+assert(getprop("ro.product.device") == "galaxys4g" || getprop("ro.build.product") == "galaxys4g" || getprop("ro.product.device") == "galaxys4gmtd" || getprop("ro.build.product") == "galaxys4gmtd" || getprop("ro.product.device") == "telusgalaxys4g" || getprop("ro.build.product") == "telusgalaxys4g" || getprop("ro.product.device") == "telusgalaxys4gmtd" || getprop("ro.build.product") == "telusgalaxys4gmtd" || getprop("ro.product.device") == "SGH-T959P" || getprop("ro.build.product") == "SGH-T959P" || getprop("ro.product.device") == "SGH-T959V" || getprop("ro.build.product") == "SGH-T959V" || getprop("ro.product.device") == "SGH-T959W" || getprop("ro.build.product") == "SGH-T959W" || abort("This package is for device: galaxys4g,galaxys4gmtd,telusgalaxys4g,telusgalaxys4gmtd,SGH-T959P,SGH-T959V,SGH-T959W; this device is " + getprop("ro.product.device") + "."););
+package_extract_file("updater.sh", "/tmp/updater.sh");
+set_metadata("/tmp/updater.sh", "uid", 0, "gid", 0, "mode", 0777);
+package_extract_file("make_ext4fs", "/tmp/make_ext4fs");
+set_metadata("/tmp/make_ext4fs", "uid", 0, "gid", 0, "mode", 0777);
+package_extract_file("busybox", "/tmp/busybox");
+set_metadata("/tmp/busybox", "uid", 0, "gid", 0, "mode", 0777);
+package_extract_file("flash_image", "/tmp/flash_image");
+set_metadata("/tmp/erase_image", "uid", 0, "gid", 0, "mode", 0777);
+package_extract_file("ramdisk.cpio", "/tmp/ramdisk.cpio");
+package_extract_file("boot.img", "/tmp/boot.img");
+assert(run_program("/tmp/updater.sh") == 0);
+set_progress(1.000000);

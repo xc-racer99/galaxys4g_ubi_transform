@@ -1,0 +1,5 @@
+ota-required-cache=0
+ota-type=FILE
+post-build=Samsung/aosp_galaxys4gmtd/galaxys4gmtd:7.1.1/N6F26U/jon03071750:user/test-keys
+post-timestamp=1488937848
+pre-device=galaxys4gmtd
