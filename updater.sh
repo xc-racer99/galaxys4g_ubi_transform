@@ -72,84 +72,67 @@ warn_repartition() {
 set -x
 export PATH=/:/sbin:/system/xbin:/system/bin:/tmp:$PATH
 
-# make sure there's not 3 partitions, we can't handle that many
-if /tmp/busybox test -e /dev/block/mmcblk0p3 ; then
-    ui_print "You have 3+ partitions"
-    ui_print "Please go down to 2 or fewer"
-    ui_print "and the run this again"
-    exit 4
+# warn repartition
+warn_repartition
+
+# make sure sdcard is mounted
+check_mount /sdcard /dev/block/mmcblk0p1 vfat
+
+# everything is logged into /sdcard/aries_ubi_update.log
+set_log /sdcard/aries_ubifs_update.log
+
+# copy ramdisk to sdcard
+/tmp/busybox cp /tmp/ramdisk.cpio /sdcard
+
+# make sure efs is mounted
+if /tmp/busybox test -e /dev/block/mtdblock0 ; then
+    COUNTER=0
+    while [  $COUNTER -lt 10 ]; do
+	NAME=$(/tmp/busybox cat /sys/class/mtd/mtd$COUNTER/name)
+        if [ "$NAME" = "efs" ] ; then
+            break;
+        fi;
+        let COUNTER=COUNTER+1 
+    done
+    check_mount /efs /dev/block/mtdblock$COUNTER yaffs2
+else
+    check_mount /efs /dev/block/stl3 rfs
 fi
 
-# check if we're running on a bml or mtd device
-if /tmp/busybox test -e /dev/block/bml7 || [ "$(/tmp/busybox cat /sys/class/mtd/mtd1/name)" != "ramdisk" ] ; then
-    # we're running on a bml or an old mtd device
-
-    # warn repartition
-    warn_repartition
-
-    # make sure sdcard is mounted
-    check_mount /sdcard /dev/block/mmcblk0p1 vfat
-
-    # everything is logged into /sdcard/aries_ubi_update.log
-    set_log /sdcard/aries_ubi_update.log
-
-    # copy ramdisk to sdcard
-    /tmp/busybox cp /tmp/ramdisk.cpio /sdcard
-
-    # make sure efs is mounted
-    if /tmp/busybox test -e /dev/block/mtdblock0 ; then
-        check_mount /efs /dev/block/stl3 yaffs2
-    else
-        check_mount /efs /dev/block/stl3 rfs
-    fi
-
-    # create a backup of efs
-    if /tmp/busybox test -e /sdcard/backup/efs.tar ; then
-        /tmp/busybox mv /sdcard/backup/efs.tar /sdcard/backup/efs-$$.tar
-        /tmp/busybox mv /sdcard/backup/efs.tar.md5 /sdcard/backup/efs-$$.tar.md5
-    fi
-    /tmp/busybox rm -f /sdcard/backup/efs.tar
-    /tmp/busybox rm -f /sdcard/backup/efs.tar.md5
-
-    /tmp/busybox mkdir -p /sdcard/backup
-
-    cd /efs
-    /tmp/busybox tar cf /sdcard/backup/efs.tar *
-
-    # Now we checksum the file. We'll verify later when we do a restore
-    cd /sdcard/backup/
-    /tmp/busybox md5sum -t efs.tar > efs.tar.md5
-
-    # write new kernel to boot partition
-    /tmp/busybox chmod +x /tmp/flash_image
-    /tmp/flash_image boot /tmp/boot.img
-    if [ "$?" != "0" ] ; then
-        /tmp/busybox echo "Failed to write kernel to boot partition"
-        exit 3
-    fi
-    /tmp/busybox echo "Successfully wrote kernel to boot partition"
-    /tmp/busybox sync
-    /tmp/busybox umount /sdcard
-    /tmp/busybox sleep 10
-
-    /sbin/reboot
-    exit 0
-elif /tmp/busybox test -e /dev/block/mtdblock0 ; then
-    # we're running on an mtd (new) device
-
-    # make sure sdcard is mounted
-    check_mount /sdcard /dev/block/mmcblk0p1 ext4
-
-    # everything is logged into /sdcard/aries_mtd.log
-    set_log /sdcard/aries_mtd.log
-
-    # write new kernel to boot partition
-    /tmp/busybox chmod +x /tmp/flash_image
-    /tmp/flash_image boot /tmp/boot.img
-    if [ "$?" != "0" ] ; then
-        /tmp/busybox echo "Failed to write kernel to boot partition"
-        exit 2
-    fi
-    /tmp/busybox umount /sdcard
-    exit 0
+# create a backup of efs
+if /tmp/busybox test -e /sdcard/backup/efs.tar ; then
+    /tmp/busybox mv /sdcard/backup/efs.tar /sdcard/backup/efs-$$.tar
+    /tmp/busybox mv /sdcard/backup/efs.tar.md5 /sdcard/backup/efs-$$.tar.md5
 fi
+/tmp/busybox rm -f /sdcard/backup/efs.tar
+/tmp/busybox rm -f /sdcard/backup/efs.tar.md5
+
+/tmp/busybox mkdir -p /sdcard/backup
+
+cd /efs
+/tmp/busybox tar cf /sdcard/backup/efs.tar *
+
+# Now we checksum the file. We'll verify later when we do a restore
+cd /sdcard/backup/
+/tmp/busybox md5sum -t efs.tar > efs.tar.md5
+
+# Copy u-boot.bin and recovery.img to SD
+/tmp/busybox rm /sdcard/backup/u-boot.bin
+/tmp/busybox rm /sdcard/backup/recovery.img
+/tmp/busybox cp u-boot.bin /sdcard/backup
+/tmp/busybox cp recovery.img /sdcard/backup
+
+# write new kernel to boot partition
+/tmp/busybox chmod +x /tmp/flash_image
+/tmp/flash_image boot /tmp/zImage
+if [ "$?" != "0" ] ; then
+    /tmp/busybox echo "Failed to write kernel to boot partition"
+    exit 3
+fi
+/tmp/busybox echo "Successfully wrote kernel to boot partition"
+/tmp/busybox sync
+/tmp/busybox umount /sdcard
+/tmp/busybox sleep 10
+
+#/sbin/reboot
+exit 0
