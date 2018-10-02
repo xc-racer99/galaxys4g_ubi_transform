@@ -81,9 +81,6 @@ check_mount /sdcard /dev/block/mmcblk0p1 vfat
 # everything is logged into /sdcard/aries_ubi_update.log
 set_log /sdcard/aries_ubifs_update.log
 
-# copy ramdisk to sdcard
-/tmp/busybox cp /tmp/ramdisk.cpio /sdcard
-
 # make sure efs is mounted
 if /tmp/busybox test -e /dev/block/mtdblock0 ; then
     COUNTER=0
@@ -119,8 +116,8 @@ cd /sdcard/backup/
 # Copy u-boot.bin and recovery.img to SD
 /tmp/busybox rm /sdcard/backup/u-boot.bin
 /tmp/busybox rm /sdcard/backup/recovery.img
-/tmp/busybox cp u-boot.bin /sdcard/backup
-/tmp/busybox cp recovery.img /sdcard/backup
+/tmp/busybox cp /tmp/u-boot.bin /sdcard/backup
+/tmp/busybox cp /tmp/recovery.img /sdcard/backup
 
 # write new kernel to boot partition
 /tmp/busybox chmod +x /tmp/flash_image
