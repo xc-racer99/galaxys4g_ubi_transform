@@ -69,64 +69,48 @@ warn_repartition() {
     /tmp/busybox rm -fr /tmp/.accept_wipe;
 }
 
+format_partitions() {
+    /lvm/sbin/lvm lvcreate -L ${SYSTEM_SIZE}B -n system lvpool
+    /lvm/sbin/lvm lvcreate -l 100%FREE -n userdata lvpool
+
+    # format data (/system will be formatted by updater-script)
+    /tmp/make_ext4fs -b 4096 -g 32768 -i 8192 -I 256 -l -16384 -a /data /dev/lvpool/userdata
+
+    # unmount and format datadata
+    /tmp/busybox umount -l /datadata
+    /tmp/erase_image datadata
+}
+
 set -x
 export PATH=/:/sbin:/system/xbin:/system/bin:/tmp:$PATH
+
+SYSTEM_SIZE='629145600' # 600M
+MMC_PART='/dev/block/mmcblk0p2'
 
 # warn repartition
 warn_repartition
 
 # make sure sdcard is mounted
-check_mount /sdcard /dev/block/mmcblk0p1 vfat
+#check_mount /sdcard /dev/block/mmcblk0p1 vfat
 
 # everything is logged into /sdcard/aries_ubi_update.log
-set_log /sdcard/aries_ubifs_update.log
+#set_log /sdcard/aries_ubifs_update.log
 
-# make sure efs is mounted
-if /tmp/busybox test -e /dev/block/mtdblock0 ; then
-    COUNTER=0
-    while [  $COUNTER -lt 10 ]; do
-	NAME=$(/tmp/busybox cat /sys/class/mtd/mtd$COUNTER/name)
-        if [ "$NAME" = "efs" ] ; then
-            break;
-        fi;
-        let COUNTER=COUNTER+1 
-    done
-    check_mount /efs /dev/block/mtdblock$COUNTER yaffs2
-else
-    check_mount /efs /dev/block/stl3 rfs
-fi
+ubiformat /dev/mtd/mtd3 -y
+ubiattach -p /dev/mtd/mtd3
 
-# create a backup of efs
-if /tmp/busybox test -e /sdcard/backup/efs.tar ; then
-    /tmp/busybox mv /sdcard/backup/efs.tar /sdcard/backup/efs-$$.tar
-    /tmp/busybox mv /sdcard/backup/efs.tar.md5 /sdcard/backup/efs-$$.tar.md5
-fi
-/tmp/busybox rm -f /sdcard/backup/efs.tar
-/tmp/busybox rm -f /sdcard/backup/efs.tar.md5
+# Create UBI volumes for radio, efs, cache, system, datadata
+ubimkvol /dev/ubi0 -s 19712KiB -N radio
+ubimkvol /dev/ubi0 -s 5888KiB -N efs
+ubimkvol /dev/ubi0 -s 40960KiB -N cache
+ubimkvol /dev/ubi0 -m -N datadata
 
-/tmp/busybox mkdir -p /sdcard/backup
+# Create LVM partitions
+/lvm/sbin/lvm lvremove -f lvpool
+/lvm/sbin/lvm pvcreate $MMC_PART
+/lvm/sbin/lvm vgcreate lvpool $MMC_PART
+format_partitions
 
-cd /efs
-/tmp/busybox tar cf /sdcard/backup/efs.tar *
-
-# Now we checksum the file. We'll verify later when we do a restore
-cd /sdcard/backup/
-/tmp/busybox md5sum -t efs.tar > efs.tar.md5
-
-# Copy u-boot.bin and recovery.img to SD
-/tmp/busybox rm /sdcard/backup/u-boot.bin
-/tmp/busybox rm /sdcard/backup/recovery.img
-/tmp/busybox cp /tmp/u-boot.bin /sdcard/backup
-/tmp/busybox cp /tmp/recovery.img /sdcard/backup
-
-# write new kernel to boot partition
-/tmp/busybox chmod +x /tmp/flash_image
-/tmp/flash_image boot /tmp/zImage
-if [ "$?" != "0" ] ; then
-    /tmp/busybox echo "Failed to write kernel to boot partition"
-    exit 3
-fi
-/tmp/busybox echo "Successfully wrote kernel to boot partition"
 /tmp/busybox sync
 /tmp/busybox umount /sdcard
 /tmp/busybox sleep 10
